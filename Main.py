@@ -1,8 +1,9 @@
 import sys
-#import pyodbc
+import pyodbc
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
+from updateLists import *
 
 # To check to go faster typing: https://www.keybr.com/
 
@@ -24,7 +25,7 @@ class Color(QWidget):
         self.setPalette(palette)
 
 
-class Window(QWidget):    
+class Window(QWidget):
 
     def __init__(self):
         super().__init__()
@@ -33,7 +34,29 @@ class Window(QWidget):
         self.UI()
 
     def UI(self):
+        # Setting up menu bar
+        menuBar=QMenuBar()
+        
+        # Main menu
+        menuFile=menuBar.addMenu('Main')
+        actionExit=QAction('Exit',self)
+        menuFile.addAction(actionExit)
+
+        # Option menu
+        menuOption=menuBar.addMenu('Options')
+        actionDatabase=QAction('Database connection',self)
+        actionLanguage=QAction('Language',self)
+        menuOption.addAction(actionDatabase)
+        menuOption.addAction(actionLanguage)
+
+        # Help menu
+        menuHelp=menuBar.addMenu('Help')
+        actionAbout=QAction('About',self)
+        menuHelp.addAction(actionAbout)
+
+        # Setting up main layout
         mainLayout=QVBoxLayout()
+        mainLayout.addWidget(menuBar)
         self.tabs=QTabWidget()
 
         tab_names=["Quality check","Packing station","Add scrap", "Downtime event", "Cutting tools change"]
@@ -67,7 +90,6 @@ class Window(QWidget):
         self.Info_output.setWordWrap(True)
         self.Info_output.setStyleSheet("background-color: lightgrey;""border : 2px solid black;")
         self.Info_output.setAlignment(Qt.AlignTop)
-        #self.Info_output.setMinimumHeight(20)
 
         # Adding elements to quality layout
         tab1GridLayout.addWidget(self.DMC_text,1,0)
@@ -99,6 +121,7 @@ class Window(QWidget):
         # Adding part type selection
         self.scrap_001_Hbox=QHBoxLayout()
         self.part_type_text=QLabel("Select part type:")
+        self.part_type_text.setAlignment(Qt.AlignRight)
         self.part_type_list=QComboBox(self)
         for cmt in range(10):
             self.part_type_list.addItem("Part type "+str(cmt))
@@ -109,33 +132,57 @@ class Window(QWidget):
 
         # Adding cavity selection
         self.cavity_list_text=QLabel("Select cavity number:")
+        self.cavity_list_text.setAlignment(Qt.AlignRight)
         self.cavity_list=QComboBox(self)
         for cmt in range(10):
             self.cavity_list.addItem("Cavity "+str(cmt))
 
-        # Adding equipment selection (where scrap found)
-        self.eq_select_list_text=QLabel("Select equipment:")
+        # Adding station selection (where scrap found)
+        self.eq_select_list_text=QLabel("Select station:")
+        self.eq_select_list_text.setAlignment(Qt.AlignRight)
         self.eq_select_list=QComboBox(self)
         for cmt in range(10):
             self.eq_select_list.addItem("Machine "+str(cmt)) 
 
         # Adding production date pick
         self.scrap_tab_production_date_text=QLabel("Select production date:")
+        self.scrap_tab_production_date_text.setAlignment(Qt.AlignRight)
         self.scrap_tab_production_date=QDateEdit(calendarPopup=True)
         self.scrap_tab_production_date.setDateTime(QDateTime.currentDateTime())
 
         # Adding layout for area selection
         area_select_layout=QGridLayout()
         self.area_select_text=QLabel("Select defect area")
+        self.area_select_text.setAlignment(Qt.AlignCenter)
 
         # Adding background image
         self.img_label = QLabel(self)
         self.img_label.mousePressEvent = self.getPos
-        self.updateScrapPic()
+        self.updateScrapPic(0)
 
         # Adding selection button for scraps
-        self.change_view=QPushButton("Change view")
-        self.change_view.clicked.connect(self.messageBox)
+        scrap_view_selector_layout=QGridLayout()
+        self.scrap_view_00=QPushButton('●')
+        self.scrap_view_00.clicked.connect(lambda: self.updateScrapPic(0))
+        self.scrap_view_01=QPushButton('◀ ')
+        self.scrap_view_01.clicked.connect(lambda: self.updateScrapPic(1))
+        self.scrap_view_02=QPushButton('▲')
+        self.scrap_view_02.clicked.connect(lambda: self.updateScrapPic(2))
+        self.scrap_view_03=QPushButton('▶')
+        self.scrap_view_03.clicked.connect(lambda: self.updateScrapPic(3))
+        self.scrap_view_04=QPushButton('▼')
+        self.scrap_view_04.clicked.connect(lambda: self.updateScrapPic(4))        
+        self.scrap_view_05=QPushButton('◎')
+        self.scrap_view_05.clicked.connect(lambda: self.updateScrapPic(5)) 
+
+        # assign buttons in the grid
+        scrap_view_selector_layout.addWidget(self.area_select_text,0,0,1,3)
+        scrap_view_selector_layout.addWidget(self.scrap_view_00,2,1) # button / row / col
+        scrap_view_selector_layout.addWidget(self.scrap_view_01,2,0)
+        scrap_view_selector_layout.addWidget(self.scrap_view_02,1,1)
+        scrap_view_selector_layout.addWidget(self.scrap_view_03,2,2)
+        scrap_view_selector_layout.addWidget(self.scrap_view_04,3,1)
+        scrap_view_selector_layout.addWidget(self.scrap_view_05,4,1)
         
         # Setting up grid 2 map
         tab2GridLayout.addWidget(self.scrap_tab_DMC_text,1,0)
@@ -148,9 +195,9 @@ class Window(QWidget):
         tab2GridLayout.addLayout(self.scrap_001_Hbox,4,1)
         tab2GridLayout.addWidget(self.cavity_list_text,6,0)
         tab2GridLayout.addWidget(self.cavity_list,6,1)
-        tab2GridLayout.addWidget(self.area_select_text,7,0)
-        tab2GridLayout.addWidget(self.img_label,7,1)
-        tab2GridLayout.addWidget(self.change_view,8,1)
+        #tab2GridLayout.addWidget(self.area_select_text,7,0)
+        tab2GridLayout.addWidget(self.img_label,7,1,2,1)
+        tab2GridLayout.addLayout(scrap_view_selector_layout,7,0)
 
         self.tab1.setLayout(tab1GridLayout)
         self.tab3.setLayout(tab2GridLayout)
@@ -163,8 +210,7 @@ class Window(QWidget):
 
     def scrapTabLayout(self):
         # Function to define the scrap tab layout
-        print('Test function')
-
+        print('From scrapTabLayout function')
 
     def btnFunc(self):
         self.text.setText("Button is active")
@@ -173,23 +219,17 @@ class Window(QWidget):
     def DMCFunc(self):
         button.clicked.connect(self.messageBox)
 
-
     def messageBox(self):
-        # mbox=QMessageBox.question(self,"Warning!!!","Are you sure to exit?",QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,QMessageBox.No)
-        # if mbox==QMessageBox.Yes:
-        #     sys.exit()
-        # elif mbox==QMessageBox.No:
-        #     print("You Clicked No Button")
         BarcodeInput = self.DMC_input.text()
         
         # Cleanup text input
-        # BarcodeInput = BarcodeInput.strip()
+        BarcodeInput = BarcodeInput.strip()
 
-        # self.DMC_input.text = BarcodeInput
+        self.DMC_input.text = BarcodeInput
         
         if len(BarcodeInput) > 5:
-            #res = check_part(conn,BarcodeInput)
-            #self.Info_output.setText(str(res[0]))
+            res = check_part(conn,BarcodeInput)
+            self.Info_output.setText(str(res[0]))
             self.Info_output.setText('Part results')
 
             self.Status_text.setText('✔')
@@ -199,50 +239,51 @@ class Window(QWidget):
             #     self.Status_text.setText('✔')
             #     self.Status_text.setStyleSheet('color: green')
 
-            # print(len(BarcodeInput))
-        # mbox=QMessageBox.information(self,"Information","You Logged Out!")
-
     def getPos(self,event):
         x = event.pos().x()
         y = event.pos().y() 
-        print('Button pressed at x: ' + str(x) + ' y:' + str(x))
+        print('Button pressed at x: ' + str(x) + ' y:' + str(y))
+    
+    def updateScrapPic(self,view):
+        # setting up the picture path
+        picture_path= 'img/part_view_' + str(view) + '.png'
+        print(picture_path)
 
-    def updateScrapPic(self):
-        self.pixmap=QPixmap('img/part_view_0.png')
+        self.pixmap=QPixmap(picture_path)
         self.pixmap_scaled=self.pixmap.scaledToHeight(300)
         self.img_label.setPixmap(self.pixmap_scaled)
         self.img_label.setGeometry(0,0,100,300)
 
 # Setting up database connection
-# def check_part(conn,search_val):
-    #cursor = conn.cursor()
-    #cursor.execute('select Insert_Time from Laser_marker_printed_PN where DM_Content = ?',search_val)
+def check_part(conn,search_val):
+    cursor = conn.cursor()
+    cursor.execute('select caster_name from caster_list')#,search_val)
     
-    # Checking cursors sise
+    # Checking cursor size
     #results=cursor.fetchone()
+    results=''
 
-    # for row in cursor:
-    #     results.append(row)
+    for row in cursor:
+        #results.append(row)
+        print(row)
     
-    # results.append('end')
-#    result = 'Part status'
+    results.append('end')
 
-    #conn.commit()
- #   return results
+    conn.commit()
+    return results
 
 def main():
     App=QApplication(sys.argv)
     window = Window()
     sys.exit(App.exec_())
 
-#conn = pyodbc.connect(
-#"Driver={SQL Server Native Client 11.0};"
-#"Server=10.41.32.2;"
-#"Database=SZ_001;"
-#"Trusted_Connection=yes;"
-#)  
+conn = pyodbc.connect(
+"Driver={SQL Server Native Client 11.0};"
+"Server=10.41.32.4;"
+"Database=SZ_001;"
+"Trusted_Connection=yes;")
 
 if __name__=='__main__':
     main()
 
-# conn.close()
+conn.close()

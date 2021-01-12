@@ -128,42 +128,16 @@ class Window(QWidget):
         area_select_layout=QGridLayout()
         self.area_select_text=QLabel("Select defect area")
 
-        # adding background image
-        test_frame=QFrame()
-        test_frame.resize(500,800)
-        #test_frame.setStyleSheet('background-color: rgb(200, 255, 255)')
-        test_frame.setStyleSheet('background-image: url(test_bg.jpg);')
+        # Adding background image
+        self.img_label = QLabel(self)
+        self.img_label.mousePressEvent = self.getPos
+        self.updateScrapPic()
+
+        # Adding selection button for scraps
+        self.change_view=QPushButton("Change view")
+        self.change_view.clicked.connect(self.messageBox)
         
-        test_frame.mousePressEvent = self.getPos
-        area_select_layout.addWidget(test_frame,0,0,5,5)
-
-        # declare array of buttons
-        #scrap_area_buttons={}
-
-        # adding selection buttons
-        #for i_row in range(5):
-        #    for i_col in range(5):
-                
-                # keep a reference to the buttons
-                #scrap_area_buttons[(i_row, i_col)] = QPushButton('%d / %d' % (i_row, i_col))
-                # add to the layout
-                #area_select_layout.addWidget(scrap_area_buttons[(i_row, i_col)], i_row, i_col)
-                
-                #scrap_area_buttons[(i_row, i_col)].setStyleSheet("background-color: rgba(33,33,33,10)")
-
-                # scrap_area_buttons[(i_row, i_col)].mousePressEvent.connect(self.getPos)
-
-                # link to button function
-                #cmd_str='self.Butt_'+ str(i_row) + str(i_col)+'.clicked.connect(lambda: self.scrapArea(' + str(i_row)+',' + str(i_col) +'))'
-                #cmd_str='self.Butt_'+ str(i_row) + str(i_col)+'.clicked.connect(self.scrapArea(' + str(i_row)+',' + str(i_col) +'))'
-                #exec(cmd_str)
-
-        #self.Butt_00.clicked.connect(lambda: self.scrapArea(0,0))
-        #self.Butt_44.clicked.connect(lambda: self.scrapArea(4,4))
-        self.test_label = QLabel(self)
-        self.pixmap=QPixmap('img/test_bg.jpeg')
-        self.test_label.setPixmap(self.pixmap)
-
+        # Setting up grid 2 map
         tab2GridLayout.addWidget(self.scrap_tab_DMC_text,1,0)
         tab2GridLayout.addWidget(self.scrap_tab_DMC_input,1,1)
         tab2GridLayout.addWidget(self.eq_select_list_text,2,0)
@@ -175,8 +149,8 @@ class Window(QWidget):
         tab2GridLayout.addWidget(self.cavity_list_text,6,0)
         tab2GridLayout.addWidget(self.cavity_list,6,1)
         tab2GridLayout.addWidget(self.area_select_text,7,0)
-        tab2GridLayout.addLayout(area_select_layout,7,1)
-        tab2GridLayout.addWidget(self.test_label,8,1)
+        tab2GridLayout.addWidget(self.img_label,7,1)
+        tab2GridLayout.addWidget(self.change_view,8,1)
 
         self.tab1.setLayout(tab1GridLayout)
         self.tab3.setLayout(tab2GridLayout)
@@ -232,6 +206,12 @@ class Window(QWidget):
         x = event.pos().x()
         y = event.pos().y() 
         print('Button pressed at x: ' + str(x) + ' y:' + str(x))
+
+    def updateScrapPic(self):
+        self.pixmap=QPixmap('img/part_view_0.png')
+        self.pixmap_scaled=self.pixmap.scaledToHeight(300)
+        self.img_label.setPixmap(self.pixmap_scaled)
+        self.img_label.setGeometry(0,0,100,300)
 
 # Setting up database connection
 # def check_part(conn,search_val):

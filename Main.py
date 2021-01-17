@@ -159,7 +159,7 @@ class Window(QWidget):
         self.img_label = QLabel(self)
         self.img_label.mousePressEvent = self.getPos
         self.updateScrapPic(0)
-
+        
         # Adding selection button for scraps
         scrap_view_selector_layout=QGridLayout()
         self.scrap_view_00=QPushButton('●')
@@ -175,7 +175,7 @@ class Window(QWidget):
         self.scrap_view_05=QPushButton('◎')
         self.scrap_view_05.clicked.connect(lambda: self.updateScrapPic(5)) 
 
-        # assign buttons in the grid
+        # Assign buttons in the grid
         scrap_view_selector_layout.addWidget(self.area_select_text,0,0,1,3)
         scrap_view_selector_layout.addWidget(self.scrap_view_00,2,1) # button / row / col
         scrap_view_selector_layout.addWidget(self.scrap_view_01,2,0)
@@ -195,9 +195,22 @@ class Window(QWidget):
         tab2GridLayout.addLayout(self.scrap_001_Hbox,4,1)
         tab2GridLayout.addWidget(self.cavity_list_text,6,0)
         tab2GridLayout.addWidget(self.cavity_list,6,1)
-        #tab2GridLayout.addWidget(self.area_select_text,7,0)
         tab2GridLayout.addWidget(self.img_label,7,1,2,1)
         tab2GridLayout.addLayout(scrap_view_selector_layout,7,0)
+
+        # Creating the maintenance event tab
+        # What to add?? 
+        # So will put: a start button for the event
+        # Selection type
+        # A stop time
+        # Some later edit possibilities
+        # What kind of fix at the end and any potential root cause identification
+        # Any to identify what machine?
+        # Anything to 
+
+
+
+
 
         self.tab1.setLayout(tab1GridLayout)
         self.tab3.setLayout(tab2GridLayout)

@@ -1,9 +1,9 @@
 import sys
+from typing import Match
 import pyodbc
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
-from updateLists import *
 
 # To check to go faster typing: https://www.keybr.com/
 
@@ -77,7 +77,7 @@ class Window(QWidget):
         self.DMC_text=QLabel("Barcode:")
         self.DMC_text.setAlignment(Qt.AlignRight)
         self.DMC_input=QLineEdit()
-        self.DMC_input.editingFinished.connect(self.messageBox)
+        self.DMC_input.editingFinished.connect(self.analyseDMCInput)
 
         self.Status_text=QLabel(Nok_char)
         self.Status_text.setFont(QFont(Default_font,100))
@@ -116,7 +116,6 @@ class Window(QWidget):
         self.scrap_tab_DMC_text=QLabel("Barcode:")
         self.scrap_tab_DMC_text.setAlignment(Qt.AlignRight)
         self.scrap_tab_DMC_input=QLineEdit()
-        self.scrap_tab_DMC_input.editingFinished.connect(self.messageBox)
 
         # Adding part type selection
         self.scrap_001_Hbox=QHBoxLayout()
@@ -151,7 +150,7 @@ class Window(QWidget):
         self.scrap_tab_production_date.setDateTime(QDateTime.currentDateTime())
 
         # Adding layout for area selection
-        area_select_layout=QGridLayout()
+        #area_select_layout=QGridLayout()
         self.area_select_text=QLabel("Select defect area")
         self.area_select_text.setAlignment(Qt.AlignCenter)
 
@@ -216,11 +215,9 @@ class Window(QWidget):
         self.text.setText("Button is active")
         sys.exit()
 
-    def DMCFunc(self):
-        button.clicked.connect(self.messageBox)
-
-    def messageBox(self):
-        BarcodeInput = self.DMC_input.text()
+    def analyseDMCInput(self):
+        BarcodeInput_cursor = self.DMC_input.selectAll()
+        BarcodeInput = self.DMC_input.selectedText()
         
         # Cleanup text input
         BarcodeInput = BarcodeInput.strip()
@@ -229,12 +226,20 @@ class Window(QWidget):
         
         if len(BarcodeInput) > 5:
             res = check_part(conn,BarcodeInput)
-            self.Info_output.setText(str(res[0]))
-            self.Info_output.setText('Part results')
 
-            self.Status_text.setText('✔')
-            self.Status_text.setStyleSheet('color: green')
+            if res!=0:
+                Infos = ('Part information :' + '\n' +
+                ' SO number: ' + res['SO number'] + '\n Part type: ' + res['Part type'] + ' ' + res['Hand sign'] + 
+                '\n\nPart marked at : ' + str(res['Insert Time']) + 
+                '\n\nCode information:' + '\n Visual content: ' + res['Visual content'] +'\n Code level: ' + str(res['Code level']) +'\n Matching level at laser marking: ' + str(res['Matching level']) + 
+                '\n\nChemistry information:' + '\n Batch ID' + res['Batch ID'])
+                
+                self.Info_output.setText(Infos)
 
+                self.Status_text.setText('✔')
+                self.Status_text.setStyleSheet('color: green')
+            else:
+                self.Info_output.setText('Part not in database')
             # if res != Null:
             #     self.Status_text.setText('✔')
             #     self.Status_text.setStyleSheet('color: green')
@@ -247,27 +252,67 @@ class Window(QWidget):
     def updateScrapPic(self,view):
         # setting up the picture path
         picture_path= 'img/part_view_' + str(view) + '.png'
-        print(picture_path)
 
         self.pixmap=QPixmap(picture_path)
         self.pixmap_scaled=self.pixmap.scaledToHeight(300)
         self.img_label.setPixmap(self.pixmap_scaled)
         self.img_label.setGeometry(0,0,100,300)
 
+        # test add a red dot
+
 # Setting up database connection
 def check_part(conn,search_val):
     cursor = conn.cursor()
-    cursor.execute('select caster_name from caster_list')#,search_val)
-    
-    # Checking cursor size
-    #results=cursor.fetchone()
-    results=''
+    cursor.execute("select Machine_NO, SO_Number, Hand_Sign ,Part_Type, Insert_Time, Code_Level, Matching_Level, VC_Content, Batch_ID from Laser_marker_printed_PN where DM_content=? ",search_val)
 
-    for row in cursor:
-        #results.append(row)
-        print(row)
-    
-    results.append('end')
+    # Checking cursor size
+    row_count = cursor.rowcount
+
+    # If the size is null, will skip the other checks and return results is null
+    if row_count==0:
+        results=0
+    else:
+        # Fetching data from cursor
+        row = cursor.fetchone()
+
+        # Saving data in local variables
+        Machine_No = row[0]
+        SO_Number = row[1]
+        Hand_Sign = row[2]
+        Part_Type = row[3]
+        Insert_Time = row[4]
+        Code_Level = row[5]
+        Matching_Level = row[6]
+        VC_Content = row[7]
+        Batch_ID = row[8]
+
+        # Debug purpose only
+        # print('Machine number is ' + str(Machine_No))
+        # print('SO number is ' + str(SO_Number))
+        # print('Hand sign is ' + Hand_Sign)
+        # print('Part type is ' + Part_Type)
+        # print('Insert time is '+ str(Insert_Time))
+        # print('Code level is '+ str(Code_Level))
+        # print('Matching level is '+ str(Matching_Level))
+        # print('Visual content '+ VC_Content)
+        # print('Batch ID '+ Batch_ID)
+        
+        # Retrieve batch ID information
+        if Batch_ID!='':
+            Chemistry_results='Cool'
+            print('testing')
+
+
+        # Putting together results as a dictionary
+        results = {'Machine number':Machine_No,
+                'SO number': SO_Number,
+                'Hand sign': Hand_Sign,
+                'Part type': Part_Type.strip(),
+                'Insert Time': Insert_Time,
+                'Code level': Code_Level,
+                'Matching level': Matching_Level,
+                'Visual content': VC_Content,
+                'Batch ID': Batch_ID}
 
     conn.commit()
     return results
@@ -279,7 +324,7 @@ def main():
 
 conn = pyodbc.connect(
 "Driver={SQL Server Native Client 11.0};"
-"Server=10.41.32.4;"
+"Server=10.41.32.2;"
 "Database=SZ_001;"
 "Trusted_Connection=yes;")
 

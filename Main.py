@@ -4,8 +4,7 @@ import pyodbc
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
-
-# To check to go faster typing: https://www.keybr.com/
+import datetime
 
 # Create some default setup
 Ok_char = '✔'
@@ -23,7 +22,6 @@ class Color(QWidget):
         palette = self.palette()
         palette.setColor(QPalette.Window, QColor(color))
         self.setPalette(palette)
-
 
 class Window(QWidget):
 
@@ -207,10 +205,6 @@ class Window(QWidget):
         # Any to identify what machine?
         # Anything to 
 
-
-
-
-
         self.tab1.setLayout(tab1GridLayout)
         self.tab3.setLayout(tab2GridLayout)
         #self.tab3.setLayout(gbox)
@@ -241,13 +235,53 @@ class Window(QWidget):
             res = check_part(conn,BarcodeInput)
 
             if res!=0:
-                Infos = ('Part information :' + '\n' +
-                ' SO number: ' + res['SO number'] + '\n Part type: ' + res['Part type'] + ' ' + res['Hand sign'] + 
-                '\n\nPart marked at : ' + str(res['Insert Time']) + 
-                '\n\nCode information:' + '\n Visual content: ' + res['Visual content'] +'\n Code level: ' + str(res['Code level']) +'\n Matching level at laser marking: ' + str(res['Matching level']) + 
-                '\n\nChemistry information:' + '\n Batch ID' + res['Batch ID'])
+                # Data clean up and formatting
+                marking_time = res['Insert Time']
+                marking_time = marking_time - datetime.timedelta(microseconds=marking_time.microsecond)
                 
-                self.Info_output.setText(Infos)
+                # Create part info string
+                infos = ('Part information:' + '\n' +
+                ' SO number: ' + res['SO number'] + '\n Part type: ' + res['Part type'] + ' ' + res['Hand sign'] + 
+                '\n\nPart marked at : ' + str(marking_time) + 
+                '\n\nCode information:' + '\n Visual content: ' + str(res['Visual content']) +'\n Code level: ' + str(res['Code level']) +'\n Matching level at laser marking: ' + str(res['Matching level']) + 
+                '\n\nChemistry information:' + '\n Batch ID: ' + str(res['Batch ID']))
+                
+                # Reading chemistry results in case they are some
+                if res['Chemistry results']!=0:
+                    # Store chemisty results
+                    chem_res = res['Chemistry results']
+                    chem_infos = ('\n Check at station: ' + chem_res['Preparation line'] + str(chem_res['Preparation station']) +
+                    ' at ' + str(chem_res['Insert time']) +
+                    '\n Checked by inspector: ' + chem_res['Inspector name'] +
+                    ' and operator: ' + chem_res['Operator name'] +
+                    '\n Crucible ID: ' + str(chem_res['Crucible ID']) +
+                    '\n Used at caster ' + str(chem_res['Used station']) + ' at :' + str(chem_res['Used time']))
+                else: chem_infos =' no batch ID recorded'
+
+                # Reading xray results
+                if res['Xray results']!=0:
+                    # Store Xray results
+                    xray_res = res['Xray results']
+
+                    # Formatting about xray results and check type
+                    if xray_res['Part inspection status']==1:
+                        xray_validation_char=Ok_char
+                    else:
+                        xray_validation_char=Nok_char
+                   
+                    if xray_res['Part validation type']==0:
+                        xray_validation_type_str = 'automated'
+                    else:
+                        xray_validation_type_str = 'manual'
+
+                    xray_infos = ('\n\nX-Ray check: \n Inspection done on station ' + str(xray_res['Machine number']) + ' at ' + str(xray_res['Inspection time']) +
+                    '\n Inspestion results ' + xray_validation_char + 
+                    '\n Validation type: ' + xray_validation_type_str)
+                else: xray_infos = '\n\n No Xray information recorded'
+
+                infos = infos + chem_infos + xray_infos
+                
+                self.Info_output.setText(infos)
 
                 self.Status_text.setText('✔')
                 self.Status_text.setStyleSheet('color: green')
@@ -276,6 +310,8 @@ class Window(QWidget):
 # Setting up database connection
 def check_part(conn,search_val):
     cursor = conn.cursor()
+    
+    # Searching for marking data
     cursor.execute("select Machine_NO, SO_Number, Hand_Sign ,Part_Type, Insert_Time, Code_Level, Matching_Level, VC_Content, Batch_ID from Laser_marker_printed_PN where DM_content=? ",search_val)
 
     # Checking cursor size
@@ -289,43 +325,54 @@ def check_part(conn,search_val):
         row = cursor.fetchone()
 
         # Saving data in local variables
-        Machine_No = row[0]
-        SO_Number = row[1]
-        Hand_Sign = row[2]
-        Part_Type = row[3]
-        Insert_Time = row[4]
-        Code_Level = row[5]
-        Matching_Level = row[6]
-        VC_Content = row[7]
-        Batch_ID = row[8]
-
-        # Debug purpose only
-        # print('Machine number is ' + str(Machine_No))
-        # print('SO number is ' + str(SO_Number))
-        # print('Hand sign is ' + Hand_Sign)
-        # print('Part type is ' + Part_Type)
-        # print('Insert time is '+ str(Insert_Time))
-        # print('Code level is '+ str(Code_Level))
-        # print('Matching level is '+ str(Matching_Level))
-        # print('Visual content '+ VC_Content)
-        # print('Batch ID '+ Batch_ID)
+        results = {'Machine number' : row[0], 'SO number' : row[1], 'Hand sign' : row[2], 'Part type' : row[3].strip(), 'Insert Time' : row[4],
+        'Code level' : row[5], 'Matching level' : row[6], 'Visual content' : row[7], 'Batch ID' : row[8]}
         
+        Batch_ID = row[8]
         # Retrieve batch ID information
         if Batch_ID!='':
-            Chemistry_results='Cool'
-            print('testing')
+            cursor.execute("select line, station, crucible_id, density, temperature, kmold, silicon, titanium, copper, iron, stronium, manganese, magnesium, zinc, insert_time, Used_Station, Used_Time, inspector_name, operator_name from Casting_Chemistry_use where batch_id=?",Batch_ID)
+            
+            # Checking cursor size
+            row_count = cursor.rowcount
 
+            # if no result, will send no information results
+            if row_count==0:
+                chemistry_results=0
+            else:
+                # Fetching data from cursor
+                row = cursor.fetchone()
+
+                # Putting together results as a dictionary
+                chemistry_results = {'Preparation line': row[0], 'Preparation station': row[1],
+                    'Crucible ID': row[2],
+                    'Density': row[3],'Temperature' : row[4], 'Kmold' : row[5],
+                    'Silicon' : row[6], 'Titanium' : row[7], 'Copper' : row[8], 'Stronium' : row[9],
+                    'Manganese' : row[10], 'Magnesium' : row[11], 'Zinc' : row[13],
+                    'Insert time' : row[14], 'Used station' : row[15], 'Used time' : row[16], 'Inspector name' : row[17], 'Operator name' : row[18]}
+        else: # in case we cannot find any Batch ID, need to put chemistry results as 0 
+            chemistry_results=0
+
+        # Checking for any XRay information
+        cursor.execute("select Inspection_Time, Part_Inspection_Status, Part_Validation_Type, Machine_NO, Program_Code from X_Ray_Inspection_Result where DM_Content = ?",search_val)
+        
+        # Checking cursor size
+        row_count = cursor.rowcount
+
+        # If the size is null, will skip the other checks and return results is null
+        if row_count==0:
+            xray_results=0
+        else:
+             # Fetching data from cursor
+            row = cursor.fetchone()
+
+            # Putting together results as a dictionary
+            xray_results = {'Inspection time': row[0], 'Part inspection status': row[1], 'Part validation type': row[2], 'Machine number': row[3], 'Program code': row[4]}
 
         # Putting together results as a dictionary
-        results = {'Machine number':Machine_No,
-                'SO number': SO_Number,
-                'Hand sign': Hand_Sign,
-                'Part type': Part_Type.strip(),
-                'Insert Time': Insert_Time,
-                'Code level': Code_Level,
-                'Matching level': Matching_Level,
-                'Visual content': VC_Content,
-                'Batch ID': Batch_ID}
+        results['Chemistry results'] = chemistry_results
+        results['Xray results'] = xray_results
+
 
     conn.commit()
     return results

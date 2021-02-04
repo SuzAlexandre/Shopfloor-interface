@@ -329,9 +329,11 @@ class Window(QWidget):
         print('Button pressed at x: ' + str(x) + ' y:' + str(y))
 
         # test add a red dot
-        painter = QPainter(self.pixmap_scaled)
-        painter.setPen(QColor(255,255,255,200))
-        painter.drawPoint(x,y)
+        painter = QPainter(self.pixmap)
+        point = QPoint(x,y)
+        painter.setPen(QColor(255,0,0,200))
+        painter.drawPixmap(point,self.pixmap)
+        # painter.drawPoint(x,y)
         
     def updateScrapPic(self,view):
         # setting up the picture path

@@ -229,6 +229,10 @@ class Window(QWidget):
         # Cleanup text input
         BarcodeInput = BarcodeInput.strip()
 
+        # Some special cleanup for Aiways
+        if BarcodeInput.find('AIWAYS'):
+            BarcodeInput=BarcodeInput.replace(',','%044A')
+
         self.DMC_input.text = BarcodeInput
         
         if len(BarcodeInput) > 5:
@@ -238,7 +242,7 @@ class Window(QWidget):
                 # Data clean up and formatting
                 marking_time = res['Insert Time']
                 marking_time = marking_time - datetime.timedelta(microseconds=marking_time.microsecond)
-                
+
                 # Create part info string
                 infos = ('Part information:' + '\n' +
                 ' SO number: ' + res['SO number'] + '\n Part type: ' + res['Part type'] + ' ' + res['Hand sign'] + 
@@ -250,10 +254,14 @@ class Window(QWidget):
                 if res['Chemistry results']!=0:
                     # Store chemisty results
                     chem_res = res['Chemistry results']
+
+                    # Data cleanup and formatting
+                    operator_name = str(chem_res['Operator name'])
+                    inspector_name = str(chem_res['Inspector name'])
+
                     chem_infos = ('\n Check at station: ' + chem_res['Preparation line'] + str(chem_res['Preparation station']) +
                     ' at ' + str(chem_res['Insert time']) +
-                    '\n Checked by inspector: ' + chem_res['Inspector name'] +
-                    ' and operator: ' + chem_res['Operator name'] +
+                    '\n Checked by inspector: ' + inspector_name + ' and operator: ' + operator_name +
                     '\n Crucible ID: ' + str(chem_res['Crucible ID']) +
                     '\n Used at caster ' + str(chem_res['Used station']) + ' at :' + str(chem_res['Used time']))
                 else: chem_infos =' no batch ID recorded'
@@ -274,12 +282,36 @@ class Window(QWidget):
                     else:
                         xray_validation_type_str = 'manual'
 
+                    # Setting up the info string
                     xray_infos = ('\n\nX-Ray check: \n Inspection done on station ' + str(xray_res['Machine number']) + ' at ' + str(xray_res['Inspection time']) +
-                    '\n Inspestion results ' + xray_validation_char + 
+                    '\n Inspection results ' + xray_validation_char + 
                     '\n Validation type: ' + xray_validation_type_str)
-                else: xray_infos = '\n\n No Xray information recorded'
+                else: xray_infos = '\n\nNo Xray information recorded'
 
-                infos = infos + chem_infos + xray_infos
+                # Reading packing results
+                if res['Pack results']!=0:
+                    # Store Xray results
+                    pack_res = res['Pack results']
+
+                    # Formatting about xray results and check type 
+                    process_status = pack_res['Last process status']
+                    if process_status!='None':
+                        process_status_dic = {0: 'Finished goods', 99: 'In process', 13: 'Blabla 13', 14:'Blabla 13', -1: 'Unknown reference value'}
+                        process_status_str = process_status_dic.get(process_status,-1)
+                    else: process_status_str = 'Unknown'
+
+                    packing_time = pack_res['Packing time']
+                    packing_time = packing_time - datetime.timedelta(microseconds=packing_time.microsecond) 
+
+                    # Setting up the info string
+                    pack_infos = ('\n\nPacking information: \n Last packing recorded at station ' + str(pack_res['Station reference']) +
+                    '\n Packing time: ' + str(packing_time) +
+                    '\n Lot number: ' + str(pack_res['Lot number']) +
+                    '\n Most probable layer: ' + str(pack_res['Layer number'])+
+                    '\n Last process status: ' + process_status_str)
+                else: pack_infos = '\n\n No packing information recorded'
+
+                infos = infos + chem_infos + xray_infos + pack_infos
                 
                 self.Info_output.setText(infos)
 
@@ -295,7 +327,12 @@ class Window(QWidget):
         x = event.pos().x()
         y = event.pos().y() 
         print('Button pressed at x: ' + str(x) + ' y:' + str(y))
-    
+
+        # test add a red dot
+        painter = QPainter(self.pixmap_scaled)
+        painter.setPen(QColor(255,255,255,200))
+        painter.drawPoint(x,y)
+        
     def updateScrapPic(self,view):
         # setting up the picture path
         picture_path= 'img/part_view_' + str(view) + '.png'
@@ -304,8 +341,6 @@ class Window(QWidget):
         self.pixmap_scaled=self.pixmap.scaledToHeight(300)
         self.img_label.setPixmap(self.pixmap_scaled)
         self.img_label.setGeometry(0,0,100,300)
-
-        # test add a red dot
 
 # Setting up database connection
 def check_part(conn,search_val):
@@ -368,10 +403,37 @@ def check_part(conn,search_val):
 
             # Putting together results as a dictionary
             xray_results = {'Inspection time': row[0], 'Part inspection status': row[1], 'Part validation type': row[2], 'Machine number': row[3], 'Program code': row[4]}
+        
+        # Checking for Heat treat information
+
+
+        # Checking for any packing information
+        cursor.execute("select Updated_Time, Insert_Time, Data_Source, LOT_NO, Layer_NO, Last_Process_State from Packing_Station_and_CLPI where DM_Content = ?",search_val)
+        
+        # Checking cursor size
+        row_count = cursor.rowcount
+
+        # If the size is null, will skip the other checks and return results is null
+        if row_count==0:
+            pack_results=0
+        else:
+             # Fetching data from cursor
+            row = cursor.fetchone()
+
+            # Define the packing time
+            if str(row[0])=='None':
+                packing_time = row[1]
+            else:
+                packing_time = row[0]
+            print(str(packing_time))
+
+            # Putting together results as a dictionary
+            pack_results = {'Packing time': packing_time, 'Station reference': row[2], 'Lot number': row[3], 'Layer number': row[4], 'Last process status': row[5]}
 
         # Putting together results as a dictionary
         results['Chemistry results'] = chemistry_results
         results['Xray results'] = xray_results
+        results['Pack results'] = pack_results
 
 
     conn.commit()

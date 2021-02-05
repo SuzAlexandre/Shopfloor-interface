@@ -2,8 +2,7 @@ import sys
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
-import points
-
+#import points
 
 class GraphicsScene(QGraphicsScene):
     def __init__(self, parent=None):
@@ -17,6 +16,7 @@ class GraphicsScene(QGraphicsScene):
     def mousePressEvent(self, event):
         pen = QPen(Qt.black)
         brush = QBrush(Qt.black)
+        ellipse = QGraphicsEllipseItem()
         x = event.scenePos().x()
         y = event.scenePos().y()
         if self.opt == "Generate":
@@ -24,8 +24,30 @@ class GraphicsScene(QGraphicsScene):
         elif self.opt == "Select":
             print(x, y)
 
+class Ui_Dialog(object):
+    def setupUi(self, Dialog):
+        Dialog.setObjectName("Dialog")
+        Dialog.resize(538, 269)
+        self.graphicsView = QGraphicsView(Dialog)
+        self.graphicsView.setGeometry(QRect(130, 10, 371, 221))
+        self.graphicsView.setObjectName("graphicsView")
+        self.radioButton = QRadioButton(Dialog)
+        self.radioButton.setGeometry(QRect(20, 30, 82, 31))
+        self.radioButton.setObjectName("radioButton")
+        self.radioButton_2 = QRadioButton(Dialog)
+        self.radioButton_2.setGeometry(QRect(20, 80, 82, 17))
+        self.radioButton_2.setObjectName("radioButton_2")
 
-class SimpleWindow(QMainWindow, points.Ui_Dialog):
+        self.retranslateUi(Dialog)
+        QMetaObject.connectSlotsByName(Dialog)
+
+    def retranslateUi(self, Dialog):
+        _translate = QCoreApplication.translate
+        Dialog.setWindowTitle(_translate("Dialog", "Dialog"))
+        self.radioButton.setText(_translate("Dialog", "Generate"))
+        self.radioButton_2.setText(_translate("Dialog", "Select"))
+
+class SimpleWindow(QMainWindow, Ui_Dialog):
     def __init__(self, parent=None):
         super(SimpleWindow, self).__init__(parent)
         self.setupUi(self)

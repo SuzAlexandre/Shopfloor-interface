@@ -27,7 +27,7 @@ class Window(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Production interface")
-        self.setGeometry(350,150,600,600)
+        self.setGeometry(50,50,800,600)
         self.UI()
 
     def UI(self):
@@ -183,11 +183,24 @@ class Window(QWidget):
         self.scrap_view_05.clicked.connect(lambda: self.updateScrapPic(5))
 
         # Adding remove or add scrap point radio button
+        scrap_add_label=QLabel('Select action')
         radio_butt_layout=QVBoxLayout()
-        self.scrap_radio_add=QRadioButton('Add point')
-        self.scrap_radio_add.setChecked(True)
-        self.scrap_radio_rmv=QRadioButton('Remove point')
-        radio_butt_layout.addWidget(self.scrap_radio_add)
+        self.scrap_add_dent=QRadioButton('Dent')
+        self.scrap_add_porosity=QRadioButton('Porosity')
+        self.scrap_add_crack=QRadioButton('Crack')
+        self.scrap_add_miss_mach=QRadioButton('Missing machining')
+        self.scrap_add_other=QRadioButton('Add defect')
+        self.scrap_add_other.setChecked(True)
+        self.scrap_radio_rmv=QRadioButton('Remove defect')
+        
+        # Adding buttons to layout
+        radio_butt_layout.addWidget(scrap_add_label)
+        # radio_butt_layout.addWidget(self.scrap_add_dent)
+        # radio_butt_layout.addWidget(self.scrap_add_porosity)
+        # radio_butt_layout.addWidget(self.scrap_add_crack)
+        # radio_butt_layout.addWidget(self.scrap_add_miss_mach)
+        radio_butt_layout.addWidget(self.scrap_add_other)
+
         radio_butt_layout.addWidget(self.scrap_radio_rmv)
 
         # Assign buttons in the grid
@@ -199,6 +212,14 @@ class Window(QWidget):
         scrap_view_selector_layout.addWidget(self.scrap_view_04,3,1)
         scrap_view_selector_layout.addWidget(self.scrap_view_05,4,1)
         scrap_view_selector_layout.setAlignment(Qt.AlignTop | Qt.AlignCenter)
+
+        # Create buttons to save to database and reset 
+        scrap_add_cancel = QHBoxLayout()
+        self.save_scrap_button = QPushButton("Save to database")
+        self.save_scrap_reset = QPushButton("Reset")
+        self.save_scrap_reset.clicked.connect(self.resetScrapInfo)
+        scrap_add_cancel.addWidget(self.save_scrap_reset)
+        scrap_add_cancel.addWidget(self.save_scrap_button)
         
         # Setting up grid 2 map
         tab2GridLayout.addWidget(self.scrap_tab_DMC_text,1,0)
@@ -212,8 +233,9 @@ class Window(QWidget):
         tab2GridLayout.addWidget(self.cavity_list_text,6,0)
         tab2GridLayout.addWidget(self.cavity_list,6,1)
         tab2GridLayout.addWidget(self.graph_view,7,1,2,1)
-        tab2GridLayout.addLayout(scrap_view_selector_layout,7,0)
-        tab2GridLayout.addLayout(radio_butt_layout,8,0)
+        tab2GridLayout.addLayout(scrap_view_selector_layout,7,2)
+        tab2GridLayout.addLayout(radio_butt_layout,7,0)
+        tab2GridLayout.addLayout(scrap_add_cancel,9,1)
 
         # Creating the maintenance event tab
         # What to add?? 
@@ -372,7 +394,6 @@ class Window(QWidget):
         self.scene_backgroung=self.graph_scene.addPixmap(self.pixmap_scaled)
         self.graph_view.setAlignment(Qt.AlignTop | Qt.AlignLeft)
 
-
         # Adding relative scrap points
         for scrap_point in self.scrap_info_map:
             if scrap_point['view']==view:
@@ -393,7 +414,7 @@ class Window(QWidget):
         view=self.scrap_view
 
         # will create or delete items according to radio butt
-        if self.scrap_radio_add.isChecked():
+        if not(self.scrap_radio_rmv.isChecked()):
             # Adding new element in the info map and reload the picture
             self.scrap_info_map.append({'view':view, 'x':x,'y':y})
             self.updateScrapPic(view)
@@ -406,6 +427,11 @@ class Window(QWidget):
             self.scrap_info_map[:]=[]
             self.scrap_info_map=temp_scrap_map
             self.updateScrapPic(view)
+
+    def resetScrapInfo(self):
+        # Resetting scrap map
+        self.scrap_info_map[:]=[]
+        self.updateScrapPic(self.scrap_view)
 
 # Setting up database connection
 def check_part(conn,search_val):

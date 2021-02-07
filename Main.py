@@ -1,5 +1,4 @@
 import sys
-from typing import Match
 import pyodbc
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
@@ -28,7 +27,7 @@ class Window(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Production interface")
-        self.setGeometry(350,150,600,600)
+        self.setGeometry(50,50,800,600)
         self.UI()
 
     def UI(self):
@@ -154,8 +153,19 @@ class Window(QWidget):
 
         # Adding background image
         self.img_label = QLabel(self)
-        self.img_label.mousePressEvent = self.getPos
+        #self.img_label.mousePressEvent = self.getPos
+        
+        self.scrap_info_map=[]
+
+        # Create a graphic scene to analyse defect position
+        self.graph_scene = QGraphicsScene(self)
+        self.graph_view = QGraphicsView(self.graph_scene)
+        self.graph_view.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.graph_scene.setSceneRect(0,0,200,200)
+        self.graph_view.mousePressEvent = self.manageScrapPoints
+
         self.updateScrapPic(0)
+        self.scrap_view=0
         
         # Adding selection button for scraps
         scrap_view_selector_layout=QGridLayout()
@@ -170,7 +180,28 @@ class Window(QWidget):
         self.scrap_view_04=QPushButton('▼')
         self.scrap_view_04.clicked.connect(lambda: self.updateScrapPic(4))        
         self.scrap_view_05=QPushButton('◎')
-        self.scrap_view_05.clicked.connect(lambda: self.updateScrapPic(5)) 
+        self.scrap_view_05.clicked.connect(lambda: self.updateScrapPic(5))
+
+        # Adding remove or add scrap point radio button
+        scrap_add_label=QLabel('Select action')
+        radio_butt_layout=QVBoxLayout()
+        self.scrap_add_dent=QRadioButton('Dent')
+        self.scrap_add_porosity=QRadioButton('Porosity')
+        self.scrap_add_crack=QRadioButton('Crack')
+        self.scrap_add_miss_mach=QRadioButton('Missing machining')
+        self.scrap_add_other=QRadioButton('Add defect')
+        self.scrap_add_other.setChecked(True)
+        self.scrap_radio_rmv=QRadioButton('Remove defect')
+        
+        # Adding buttons to layout
+        radio_butt_layout.addWidget(scrap_add_label)
+        # radio_butt_layout.addWidget(self.scrap_add_dent)
+        # radio_butt_layout.addWidget(self.scrap_add_porosity)
+        # radio_butt_layout.addWidget(self.scrap_add_crack)
+        # radio_butt_layout.addWidget(self.scrap_add_miss_mach)
+        radio_butt_layout.addWidget(self.scrap_add_other)
+
+        radio_butt_layout.addWidget(self.scrap_radio_rmv)
 
         # Assign buttons in the grid
         scrap_view_selector_layout.addWidget(self.area_select_text,0,0,1,3)
@@ -180,6 +211,15 @@ class Window(QWidget):
         scrap_view_selector_layout.addWidget(self.scrap_view_03,2,2)
         scrap_view_selector_layout.addWidget(self.scrap_view_04,3,1)
         scrap_view_selector_layout.addWidget(self.scrap_view_05,4,1)
+        scrap_view_selector_layout.setAlignment(Qt.AlignTop | Qt.AlignCenter)
+
+        # Create buttons to save to database and reset 
+        scrap_add_cancel = QHBoxLayout()
+        self.save_scrap_button = QPushButton("Save to database")
+        self.save_scrap_reset = QPushButton("Reset")
+        self.save_scrap_reset.clicked.connect(self.resetScrapInfo)
+        scrap_add_cancel.addWidget(self.save_scrap_reset)
+        scrap_add_cancel.addWidget(self.save_scrap_button)
         
         # Setting up grid 2 map
         tab2GridLayout.addWidget(self.scrap_tab_DMC_text,1,0)
@@ -192,8 +232,10 @@ class Window(QWidget):
         tab2GridLayout.addLayout(self.scrap_001_Hbox,4,1)
         tab2GridLayout.addWidget(self.cavity_list_text,6,0)
         tab2GridLayout.addWidget(self.cavity_list,6,1)
-        tab2GridLayout.addWidget(self.img_label,7,1,2,1)
-        tab2GridLayout.addLayout(scrap_view_selector_layout,7,0)
+        tab2GridLayout.addWidget(self.graph_view,7,1,2,1)
+        tab2GridLayout.addLayout(scrap_view_selector_layout,7,2)
+        tab2GridLayout.addLayout(radio_butt_layout,7,0)
+        tab2GridLayout.addLayout(scrap_add_cancel,9,1)
 
         # Creating the maintenance event tab
         # What to add?? 
@@ -336,13 +378,60 @@ class Window(QWidget):
         # painter.drawPoint(x,y)
         
     def updateScrapPic(self,view):
+        # Update scrap view number
+        self.scrap_view=view
+        
+        for item in self.graph_scene.items():
+            self.graph_scene.removeItem(item)
+
+        
         # setting up the picture path
         picture_path= 'img/part_view_' + str(view) + '.png'
 
         self.pixmap=QPixmap(picture_path)
-        self.pixmap_scaled=self.pixmap.scaledToHeight(300)
-        self.img_label.setPixmap(self.pixmap_scaled)
-        self.img_label.setGeometry(0,0,100,300)
+        self.pixmap_scaled=self.pixmap.scaledToHeight(250)
+        self.pixmap_rescaled=self.pixmap.scaledToHeight(self.graph_scene.height())
+        self.scene_backgroung=self.graph_scene.addPixmap(self.pixmap_scaled)
+        self.graph_view.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+
+        # Adding relative scrap points
+        for scrap_point in self.scrap_info_map:
+            if scrap_point['view']==view:
+                ellipse = QGraphicsEllipseItem(0,0,5,5)
+                ellipse.setPen(Qt.blue)
+                ellipse.setBrush(Qt.blue)
+                ellipse.setPos(scrap_point['x'],scrap_point['y'])
+                self.graph_scene.addItem(ellipse)
+
+        # self.img_label.setPixmap(self.pixmap_scaled)
+        # self.img_label.setGeometry(0,0,100,300)
+
+    def manageScrapPoints(self,event):
+        x = event.x()
+        y = event.y()
+        
+        # read actual view
+        view=self.scrap_view
+
+        # will create or delete items according to radio butt
+        if not(self.scrap_radio_rmv.isChecked()):
+            # Adding new element in the info map and reload the picture
+            self.scrap_info_map.append({'view':view, 'x':x,'y':y})
+            self.updateScrapPic(view)
+
+        elif self.scrap_radio_rmv.isChecked():
+            temp_scrap_map=[]
+            for scrap_point in self.scrap_info_map:
+                if scrap_point['view']!=view or abs(x-scrap_point['x'])>10 or abs(y-scrap_point['y'])>10:
+                    temp_scrap_map.append({'view':scrap_point['view'], 'x':scrap_point['x'],'y':scrap_point['y']})
+            self.scrap_info_map[:]=[]
+            self.scrap_info_map=temp_scrap_map
+            self.updateScrapPic(view)
+
+    def resetScrapInfo(self):
+        # Resetting scrap map
+        self.scrap_info_map[:]=[]
+        self.updateScrapPic(self.scrap_view)
 
 # Setting up database connection
 def check_part(conn,search_val):

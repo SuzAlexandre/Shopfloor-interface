@@ -33,6 +33,7 @@ class Window(QWidget):
 
         # create some buttons
         self.butt1 = QRadioButton("Add")
+        self.butt1.setToolTip("it a test")
         self.butt1.setChecked(True)
         self.butt2 = QRadioButton("Remove")
 
@@ -41,15 +42,16 @@ class Window(QWidget):
 
         mainLayout.addWidget(self.graphview,1,2,2,1)
 
-        picture_path = 'img/part_view_0.png'
+        picture_path = './img/part_view_0.png'
         self.pixmap=QPixmap(picture_path)
         self.pixmap_scaled=self.pixmap.scaledToHeight(220)
-
         self.imItem = self.graphscene.addPixmap(self.pixmap_scaled)
+        #self.graphscene.itemAt(50,50,QTransform())
+        #self.graphview.fitInView(self.graphscene.itemsBoundingRect(),Qt.KeepAspectRatio)
+        #self.graphview.scale(self.graphscene.width(),self.graphview.height())
 
         self.setLayout(mainLayout)
 
-        
         # Setup picture path
         # self.img_label.setGeometry(0,0,400,300)
 
@@ -65,13 +67,16 @@ class Window(QWidget):
             ellipse.setPen(Qt.blue)
             ellipse.setBrush(Qt.blue)
             ellipse.setPos(x,y)
+            ellipse.setToolTip("Crack")
             self.graphscene.addItem(ellipse)
         elif self.butt2.isChecked():
             # Delete element if in the same area
+            
             for item in self.graphscene.items():
                 # check x location compare to actual x
                 if abs(x-item.x())<10 and abs(y-item.y())<10:
                     self.graphscene.removeItem(item)
+                print(item.parentItem().pos())
 
 def main():
     App=QApplication(sys.argv)

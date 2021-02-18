@@ -4,6 +4,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 import datetime
+from itertools import groupby
 
 # Create some default setup
 Ok_char = '✔'
@@ -104,7 +105,7 @@ class Window(QWidget):
         # Arranging Scrap description tab layout
         # Layout description for me first
         # We will need a scan area and one in case no readable marking
-        # if laser marked, no need to write produciton date, otherwise, need
+        # if laser marked, no need to write production date, otherwise, need
         # define part type, found center, scrap center, scrap type, position of defect and type
         # Adding an horizontal layout that will include vertical layout
         tab2GridLayout=QGridLayout()
@@ -134,11 +135,28 @@ class Window(QWidget):
             self.cavity_list.addItem("Cavity "+str(cmt))
 
         # Adding station selection (where scrap found)
-        self.eq_select_list_text=QLabel("Select station:")
+        self.eq_select_list_text=QLabel("Detected station:")
         self.eq_select_list_text.setAlignment(Qt.AlignRight)
+        self.eq_type_select_list=QComboBox(self)
         self.eq_select_list=QComboBox(self)
-        for cmt in range(10):
-            self.eq_select_list.addItem("Machine "+str(cmt)) 
+
+        equipment_list = get_equipment_list(conn_SCND_SZ)
+        equipment_type_list = equipment_list['Equipment type']
+        equipment_type_sorted = sorted(equipment_type_list)
+        equipment_type_list=[]
+ 
+        for k,g in groupby(equipment_type_sorted):
+            equipment_type_list.append(k)
+
+        # self.eq_type_select_list.addItem("")
+        self.eq_type_select_list.addItems(equipment_type_list)
+        self.eq_type_select_list.currentTextChanged.connect(lambda: self.updateEquipmentNamesList(equipment_list, self.eq_type_select_list.currentText()))
+        self.eq_type_select_list.setCurrentIndex(2) #5 is value for casters
+
+        # add an horizontal layout for equipment selection
+        scrap_tab_equipment_selection_layout=QHBoxLayout()
+        scrap_tab_equipment_selection_layout.addWidget(self.eq_type_select_list)
+        scrap_tab_equipment_selection_layout.addWidget(self.eq_select_list)
 
         # Adding production date pick
         self.scrap_tab_production_date_text=QLabel("Select production date:")
@@ -224,8 +242,10 @@ class Window(QWidget):
         # Setting up grid 2 map
         tab2GridLayout.addWidget(self.scrap_tab_DMC_text,1,0)
         tab2GridLayout.addWidget(self.scrap_tab_DMC_input,1,1)
+        tab2GridLayout.addLayout(scrap_tab_equipment_selection_layout,2,1)
         tab2GridLayout.addWidget(self.eq_select_list_text,2,0)
-        tab2GridLayout.addWidget(self.eq_select_list,2,1)
+        # tab2GridLayout.addWidget(self.eq_type_select_list,2,1)
+        tab2GridLayout.addWidget(self.eq_select_list,2,3)
         tab2GridLayout.addWidget(self.scrap_tab_production_date_text,3,0)
         tab2GridLayout.addWidget(self.scrap_tab_production_date,3,1)
         tab2GridLayout.addWidget(self.part_type_text,4,0)
@@ -365,6 +385,22 @@ class Window(QWidget):
             #     self.Status_text.setText('✔')
             #     self.Status_text.setStyleSheet('color: green')
 
+    def updateEquipmentNamesList(self,equipment_list, reference_type):
+        # Link update fonction to other content update
+        equipment_name_list_full=equipment_list['Internal name']
+        equipment_type_list_full=equipment_list['Equipment type']
+        equipment_ID_list_full=equipment_list['Equipment ID']
+        equipment_name_list=[]
+            
+        cmpt = 0
+        for eq in equipment_type_list_full:
+            if eq==reference_type:
+                equipment_name_list.append(equipment_name_list_full[cmpt])
+            cmpt = cmpt+1
+        
+        self.eq_select_list.clear()
+        self.eq_select_list.addItems(equipment_name_list)
+
     def getPos(self,event):
         x = event.pos().x()
         y = event.pos().y() 
@@ -390,7 +426,7 @@ class Window(QWidget):
 
         self.pixmap=QPixmap(picture_path)
         self.pixmap_scaled=self.pixmap.scaledToHeight(250)
-        self.pixmap_rescaled=self.pixmap.scaledToHeight(self.graph_scene.height())
+        self.pixmap_rescaled=self.pixmap.scaledToHeight(int(self.graph_scene.height()))
         self.scene_backgroung=self.graph_scene.addPixmap(self.pixmap_scaled)
         self.graph_view.setAlignment(Qt.AlignTop | Qt.AlignLeft)
 
@@ -398,8 +434,8 @@ class Window(QWidget):
         for scrap_point in self.scrap_info_map:
             if scrap_point['view']==view:
                 ellipse = QGraphicsEllipseItem(0,0,5,5)
-                ellipse.setPen(Qt.blue)
-                ellipse.setBrush(Qt.blue)
+                ellipse.setPen(Qt.red)
+                ellipse.setBrush(Qt.red)
                 ellipse.setPos(scrap_point['x'],scrap_point['y'])
                 self.graph_scene.addItem(ellipse)
 
@@ -433,7 +469,7 @@ class Window(QWidget):
         self.scrap_info_map[:]=[]
         self.updateScrapPic(self.scrap_view)
 
-# Setting up database connection
+# Checking part status
 def check_part(conn,search_val):
     cursor = conn.cursor()
     
@@ -526,10 +562,39 @@ def check_part(conn,search_val):
         results['Xray results'] = xray_results
         results['Pack results'] = pack_results
 
-
     conn.commit()
     return results
 
+# Get equipment list
+def get_equipment_list(conn):
+    cursor = conn.cursor()
+
+    #create query string
+    cursor.execute('select equipment_ID, description, equipment_type , internal_name from equipment_list')
+
+    # Checking cursor size
+    row_count = cursor.rowcount
+
+    # If the size is null, will skip the other checks and return results is null
+    if row_count==0:
+        results=0
+    else:
+        
+        # Initialize results dictionnary
+        results={'Equipment ID':[], 'Description':[], 'Equipment type':[], 'Internal name':[]}
+
+        # Loop in equipment list
+        for row in cursor:
+            # Saving data in local variables
+            results['Equipment ID'].append(row[0])
+            results['Description'].append(row[1])
+            results['Equipment type'].append(row[2])
+            results['Internal name'].append(row[3])
+    
+    conn.commit()
+    return results
+
+# Main application definition
 def main():
     App=QApplication(sys.argv)
     window = Window()
@@ -538,6 +603,12 @@ def main():
 conn = pyodbc.connect(
 "Driver={SQL Server Native Client 11.0};"
 "Server=10.41.32.2;"
+"Database=SZ_001;"
+"Trusted_Connection=yes;")
+
+conn_SCND_SZ = pyodbc.connect(
+"Driver={SQL Server Native Client 11.0};"
+"Server=10.41.32.4;"
 "Database=SZ_001;"
 "Trusted_Connection=yes;")
 

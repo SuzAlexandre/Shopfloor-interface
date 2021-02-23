@@ -120,25 +120,36 @@ class Window(QWidget):
         self.part_type_text=QLabel("Select part type:")
         self.part_type_text.setAlignment(Qt.AlignRight)
         self.part_type_list=QComboBox(self)
-        for cmt in range(10):
-            self.part_type_list.addItem("Part type "+str(cmt))
-        self.part_type_list_hand=QComboBox(self)
-        self.part_type_list_hand.addItems(['LH','RH'])
+        results = self.updatePartListName()
+        self.scrap_part_list = results["Part description"]
+        self.scrap_SO_number_list = results["SO number"]
+        self.part_type_list.addItems(self.scrap_part_list)
+        
+        # Connect to update function
+        self.part_type_list.currentTextChanged.connect(lambda : self.updateCavityList(self.scrap_SO_number_list[self.part_type_list.currentIndex()]))
+
+        # self.part_type_list_hand=QComboBox(self)
+        # self.part_type_list_hand.addItems(['LH','RH', 'Other'])
         self.scrap_001_Hbox.addWidget(self.part_type_list)
-        self.scrap_001_Hbox.addWidget(self.part_type_list_hand)
+        # self.scrap_001_Hbox.addWidget(self.part_type_list_hand) -- removed as hand in description
 
         # Adding cavity selection
         self.cavity_list_text=QLabel("Select cavity number:")
         self.cavity_list_text.setAlignment(Qt.AlignRight)
         self.cavity_list=QComboBox(self)
-        for cmt in range(10):
-            self.cavity_list.addItem("Cavity "+str(cmt))
+        
+        # Setup initial value
+        self.updateCavityList(self.scrap_SO_number_list[self.part_type_list.currentIndex()])
+        # self.updateCavityList(129)
 
         # Adding station selection (where scrap found)
+        scrap_tab_equipment_selection_layout=QHBoxLayout()
         self.eq_select_list_text=QLabel("Detected station:")
         self.eq_select_list_text.setAlignment(Qt.AlignRight)
         self.eq_type_select_list=QComboBox(self)
         self.eq_select_list=QComboBox(self)
+        scrap_tab_equipment_selection_layout.addWidget(self.eq_type_select_list)
+        scrap_tab_equipment_selection_layout.addWidget(self.eq_select_list)
 
         equipment_list = get_equipment_list(conn_SCND_SZ)
         equipment_type_list = equipment_list['Equipment type']
@@ -148,15 +159,9 @@ class Window(QWidget):
         for k,g in groupby(equipment_type_sorted):
             equipment_type_list.append(k)
 
-        # self.eq_type_select_list.addItem("")
         self.eq_type_select_list.addItems(equipment_type_list)
         self.eq_type_select_list.currentTextChanged.connect(lambda: self.updateEquipmentNamesList(equipment_list, self.eq_type_select_list.currentText()))
         self.eq_type_select_list.setCurrentIndex(2) #5 is value for casters
-
-        # add an horizontal layout for equipment selection
-        scrap_tab_equipment_selection_layout=QHBoxLayout()
-        scrap_tab_equipment_selection_layout.addWidget(self.eq_type_select_list)
-        scrap_tab_equipment_selection_layout.addWidget(self.eq_select_list)
 
         # Adding production date pick
         self.scrap_tab_production_date_text=QLabel("Select production date:")
@@ -169,10 +174,27 @@ class Window(QWidget):
         self.area_select_text=QLabel("Select defect area")
         self.area_select_text.setAlignment(Qt.AlignCenter)
 
+        # Adding scrap type pick
+        self.scrap_type_text = QLabel("Scrap type:")
+        self.scrap_type_text.setAlignment(Qt.AlignRight)
+        # scrap_types=['Type 1','Type 2', 'Type 3', '何其', '其他', '爱的', '密码', '来吧']
+        # scrap_type_input_list = QStringListModel()
+        # scrap_type_input_list.setStringList(scrap_types)
+        # scrap_type_completer = QCompleter()
+        # scrap_type_completer.setModel(scrap_type_input_list)
+        # self.scrap_type = QLineEdit()
+        # self.scrap_type.setCompleter(scrap_type_completer)
+        self.scrap_type = QComboBox()
+        # call the update function
+        self.getScrapList()
+
+        #add scrap items to the list
+        self.scrap_type.addItems(self.scrap_description)
+
         # Adding background image
         self.img_label = QLabel(self)
-        #self.img_label.mousePressEvent = self.getPos
         
+        # create blank scrap map
         self.scrap_info_map=[]
 
         # Create a graphic scene to analyse defect position
@@ -234,6 +256,7 @@ class Window(QWidget):
         # Create buttons to save to database and reset 
         scrap_add_cancel = QHBoxLayout()
         self.save_scrap_button = QPushButton("Save to database")
+        self.save_scrap_button.clicked.connect(self.saveScrapInfo)
         self.save_scrap_reset = QPushButton("Reset")
         self.save_scrap_reset.clicked.connect(self.resetScrapInfo)
         scrap_add_cancel.addWidget(self.save_scrap_reset)
@@ -252,10 +275,12 @@ class Window(QWidget):
         tab2GridLayout.addLayout(self.scrap_001_Hbox,4,1)
         tab2GridLayout.addWidget(self.cavity_list_text,6,0)
         tab2GridLayout.addWidget(self.cavity_list,6,1)
-        tab2GridLayout.addWidget(self.graph_view,7,1,2,1)
-        tab2GridLayout.addLayout(scrap_view_selector_layout,7,2)
-        tab2GridLayout.addLayout(radio_butt_layout,7,0)
-        tab2GridLayout.addLayout(scrap_add_cancel,9,1)
+        tab2GridLayout.addWidget(self.scrap_type_text,7,0)
+        tab2GridLayout.addWidget(self.scrap_type,7,1)
+        tab2GridLayout.addWidget(self.graph_view,8,1,2,1)
+        tab2GridLayout.addLayout(scrap_view_selector_layout,8,2)
+        tab2GridLayout.addLayout(radio_butt_layout,8,0)
+        tab2GridLayout.addLayout(scrap_add_cancel,10,1)
 
         # Creating the maintenance event tab
         # What to add?? 
@@ -401,6 +426,63 @@ class Window(QWidget):
         self.eq_select_list.clear()
         self.eq_select_list.addItems(equipment_name_list)
 
+    def updatePartListName(self):
+        # create cursor definition
+        cursor = conn_SCND_SZ.cursor()
+
+        # execute euqry string
+        cursor.execute('select SO_number, part_description from SO_numbers_list')
+
+        # Checking cursor size
+        row_count = cursor.rowcount
+
+        # Initialize results dictionnary
+        results={}
+        part_list=[]
+        SO_list=[]
+
+        # If the size is null, will skip the other checks and return results is null
+        if row_count!=0:
+
+            # Loop in equipment list
+            for row in cursor:
+                # Saving data in local variables
+                SO_list.append(row[0])
+                part_list.append(row[1])
+
+        # commit connection
+        conn_SCND_SZ.commit()
+        
+        # saving results in dictionnary
+        results = {'SO number': SO_list, 'Part description':part_list}
+
+        #return results
+        return results
+
+    def updateCavityList(self,SO_reference):
+        # create cursor definition
+        cursor = conn_SCND_SZ.cursor()
+        # execute query string
+        cursor.execute('select SO_number, cavity_number from casting_cavities_list where SO_number=?', SO_reference)
+
+        # Checking cursor size
+        row_count = cursor.rowcount
+
+        # both cases, we clear the list before adding more results
+        self.cavity_list.clear()
+
+        # If the size is null, will skip the other checks and return results is null
+        if row_count==0:
+            # in case no caity in use, will set to "No cavity in use"
+            self.cavity_list.addItem("No cavity in use")
+        else:
+            # Loop in results to add cavity in the list
+            for row in cursor:
+                self.cavity_list.addItem(str(row[1]))
+
+        # Commit connection
+        conn_SCND_SZ.commit()
+
     def getPos(self,event):
         x = event.pos().x()
         y = event.pos().y() 
@@ -468,6 +550,57 @@ class Window(QWidget):
         # Resetting scrap map
         self.scrap_info_map[:]=[]
         self.updateScrapPic(self.scrap_view)
+
+    def saveScrapInfo(self):
+
+        # Retrieving scrap data
+        barcode = self.scrap_tab_DMC_input.text()
+        equipment = self.eq_select_list.currentText()
+        cast_date = self.scrap_tab_production_date.dateTime().toPyDateTime()
+        cavity_number = self.cavity_list.currentText()
+        scrap_code = 1
+        equipment_ID = 1
+        SO_number=129
+        
+        cursor=conn_SCND_SZ.cursor()
+        query = "insert into scrap_list (serial_number, cavity_number, SO_number, scrap_code, equipment_ID, cast_date) values (?,?,?,?,?,?)"
+
+        try:
+            f = cursor.execute(query,barcode,cavity_number, SO_number,scrap_code, equipment_ID, cast_date)
+        except pyodbc.Error as ex:
+            sqlstate_code=ex.args[0]
+            sqlstate_message=ex.args[1]
+            
+            # Setting up message box title
+            msg_title = 'Error number: ' + str(sqlstate_code)
+            # Setting up message box text
+            msg_text = 'Error while inserting data in database.\n\nError description: \n' + sqlstate_message + '\n\nDebug information sent to engineering team, we may look at it once back in the office.' 
+
+            # Message box
+            QMessageBox.warning(self,msg_title, msg_text)
+        
+        conn_SCND_SZ.commit()
+
+    def getScrapList(self):
+        # create cursor
+        cursor = conn_SCND_SZ.cursor()
+
+        # query the table to retrieve codes and descriptions
+        cursor.execute('select scrap_code, scrap_description_EN, scrap_description_CN from scrap_code_list')
+
+        # reset self structure
+        self.scrap_codes=[]
+        self.scrap_description_EN=[]
+        self.scrap_description_CN=[]
+
+        # retrieve results and store them in self structure
+        for row in cursor:
+            self.scrap_codes.append(row[0])
+            self.scrap_description_EN.append(row[1])
+            self.scrap_description_CN.append(row[2])
+
+        # save scrap description based on language selection, and for the moment only in english
+        self.scrap_description=self.scrap_description_EN
 
 # Checking part status
 def check_part(conn,search_val):

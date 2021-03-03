@@ -1,6 +1,7 @@
 import sys
 from numpy import random
 from numpy.core import arrayprint
+from numpy.lib.function_base import _update_dim_sizes, append
 import pyodbc
 import numpy
 import datetime
@@ -44,11 +45,73 @@ def genBatchIDs():
     cursor.executemany('insert into metal_batch (metal_batch_ID, crucible_ID, insert_time, used_time) values (?,?,?,?)',res)
     conn.commit()
     
-
     # for val in crucibleId:
     #   cursor.execute('insert into crucible_list (crucible_ID) values(?)',int(val))   
     # conn.commit()
 
+def genShotList():
+    cursor = conn.cursor()
+
+    caster_list=[]
+    metal_batch_list=[]
+
+    # get list of caster
+    cursor.execute('select caster_ID from caster_list')
+
+    # save that in cursor list
+    for row in cursor:
+        caster_list.append(row[0])
+    
+    cursor.commit()
+
+    # get list of batch
+    cursor.execute('select metal_batch_ID from metal_batch')
+
+    # save that in cursor list
+    for row in cursor:
+        metal_batch_list.append(row[0])
+    
+    cursor.commit()
+
+    #create a total of:
+        # 16 casters
+        # 10 shots per hours per caster, non stop for 350 days
+
+    nb_shot = int(16*10*24)
+    cursor.fast_executemany=True
+
+    metal_batch_range=range(1,len(metal_batch_list))
+
+    nb_days = 10
+    for days in range(1,nb_days):
+        res=[]
+        print("Starting day " + str(days) + " of " + str(nb_days) + " with " + str(nb_shot) + " shots planned")
+        for i in range(nb_shot):
+            shot_time = start_date+datetime.timedelta(seconds=numpy.random.choice(numpy.arange(1,delta_time)))
+            caster_ID = random.choice(caster_list)
+            metal_batch = metal_batch_list[int(random.choice(metal_batch_range))]
+            
+            res.append([shot_time,int(caster_ID),metal_batch])
+        
+        print("Writing in database...")
+        cursor.executemany('insert into shot_list (shot_time, caster_ID, metal_batch_ID) values (?,?,?)',res)
+        conn.commit()
+
+        print('Completed day' + str(days))
+
+def reviewCounts():
+    cursor = conn.cursor()
+    
+    table_list = ['part_serial_numbers', 'parts_serial_number_shot_list', 'xray_scan', 'HT_batch_parts_list','machining_scan','assembly_scan']
+    table_list_name = ['Serial numbers', 'Shot list', 'X ray', 'HT batch', 'Machining scan', 'Assembly scan']
+
+    for table in table_list:
+        query = 'select count(serial_number) from ' + table 
+        cursor.execute(query)
+
+        row = cursor.fetchone()
+        print(row[0])
+        conn.commit()
 
 def testFunc():
     for i in range(1,120,10):
@@ -62,4 +125,11 @@ conn = pyodbc.connect(
 "Trusted_Connection=yes;")
 
 # genCrucibles()
-genBatchIDs()
+genShotList()
+
+# sudo apt-get install update
+# sudo apt-get install openvpn
+# wget https://git.io/vpn -O openvpn-install.sh
+
+# sudo bash openvpn-install.sh
+# pswd  = '6ATT8hAu5mWc9l30lS'
